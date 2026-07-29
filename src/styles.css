@@ -15,3 +15,31 @@ th:nth-child(1){width:12%}th:nth-child(2){width:20%}th:nth-child(3){width:17%}th
 header .brand{gap:10px}.brand em{font-style:normal;font-size:9px;letter-spacing:.16em;color:#5bcac2;margin-left:4px}.episode-break{display:flex;align-items:baseline;gap:10px;background:#10283b;color:#fff;padding:9px 13px;margin:18px 0 0;border-radius:8px 8px 0 0}.episode-break span{font-size:9px;letter-spacing:.18em;color:#65d0c7}.episode-break h2{margin:0;font-size:17px}.episode-edit{display:flex;align-items:center;gap:8px;font-size:10px;color:#597184;margin-bottom:8px}.episode-edit input{border:1px solid #ccd8de;border-radius:6px;padding:5px 7px;width:110px}@media print{.episode-break{background:#000!important;color:#fff!important;border-radius:0;margin-top:12px;padding:5px 8px}.episode-edit{display:none!important}}
 
 .cloud-state{font-size:12px;font-weight:800;color:#147d7b;align-self:center;padding:0 8px}
+
+/* v6 connected suite shell — matches Budget and Bible */
+:root{--nav:#0d2a3d;--nav2:#12364d;--teal:#22a6a3;--teal2:#2fb9b4;--mint:#dff5f1;--page:#f1f5f7;--card:#ffffff;--line:#d7e2e7;--text:#12263a;--muted:#637989}
+body{background:var(--page);color:var(--text)}
+.suite-shell{min-height:100vh;display:grid;grid-template-columns:250px minmax(0,1fr);grid-template-rows:66px minmax(0,1fr);background:var(--page)}
+.suite-topbar{grid-column:1/-1;grid-row:1;position:sticky;top:0;z-index:40;height:66px;display:grid;grid-template-columns:250px 1fr auto;align-items:center;padding:0;background:linear-gradient(90deg,#0c2a3d,#08263a);border:0;box-shadow:0 1px 0 rgba(255,255,255,.08)}
+.suite-brand{height:66px;border:0;background:transparent;color:#fff;display:flex;align-items:center;gap:10px;padding:0 18px;text-align:left}
+.brand-icon-bg{width:44px;height:44px;border-radius:12px;background:linear-gradient(145deg,#70dfcf,#24aaa6);display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.brand-icon-bg .ts-logo svg{width:27px;height:34px}.brand-icon-bg .ts-logo .pin-outline{stroke:#fff}.brand-icon-bg .ts-logo .mountain{fill:#fff}.brand-icon-bg .ts-logo .road{fill:#d8fff8}.brand-icon-bg .ts-logo .star{fill:#fff}
+.brand-copy{display:grid;line-height:1}.brand-copy b{font-size:15px;letter-spacing:.055em}.brand-copy small{font-size:7px;letter-spacing:.23em;color:#66ddd3;margin-top:5px}
+.suite-show-title{justify-self:center;color:#f5fbfd;font-size:15px;font-weight:850;letter-spacing:.03em}
+.suite-top-actions{display:flex;align-items:center;gap:9px;padding-right:16px}.suite-top-actions button{height:40px;border:1px solid rgba(255,255,255,.18);background:#12364d;color:#fff;border-radius:9px;padding:0 15px;display:flex;align-items:center;gap:7px;font-weight:800}.suite-top-actions button svg{width:16px;height:16px}.suite-top-actions .primary{background:linear-gradient(180deg,#36b7b2,#209d9b)!important;border-color:#4bc9c2!important}.suite-top-actions .cloud-state{color:#bed1dc;font-size:11px;padding:0}.suite-top-actions .cloud-state.error{color:#ffb6ad}
+.suite-sidebar{grid-column:1;grid-row:2;background:linear-gradient(180deg,#102f43,#0c293b);color:#fff;display:flex;flex-direction:column;padding:24px 13px 14px;min-height:calc(100vh - 66px);position:sticky;top:66px;height:calc(100vh - 66px)}
+.sidebar-show{padding:0 7px 15px}.sidebar-show h2{margin:0;font-size:19px}.sidebar-show span{display:block;margin-top:3px;font-size:10px;letter-spacing:.07em;color:#b7cbd6;font-weight:750}
+.sidebar-new{height:46px;border:0;border-radius:10px;background:linear-gradient(180deg,#36b7b2,#279f9e);color:#fff;font-weight:850;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:21px}.sidebar-new svg{width:17px}
+.sidebar-label{font-size:9px;letter-spacing:.2em;color:#8ea8b7;font-weight:850;padding:9px 8px 7px}.sidebar-link{width:100%;border:1px solid transparent;background:transparent;color:#dce8ee;border-radius:9px;padding:10px 11px;display:flex;align-items:center;gap:10px;text-align:left;font-weight:760}.sidebar-link svg{width:17px;height:17px}.sidebar-link:hover{background:rgba(255,255,255,.05)}.sidebar-link.active{background:#18475f;border-color:#28a9a6;color:#fff;box-shadow:inset 3px 0 0 #42c9c1}
+.episode-side{display:flex;justify-content:space-between;align-items:center;color:#d4e1e8;padding:8px 11px;font-size:12px}.episode-side b{font-size:9px;background:#2b5065;border-radius:99px;padding:3px 7px}.sidebar-spacer{flex:1}
+.suite-main{grid-column:2;grid-row:2;min-width:0;padding:22px 24px 34px;max-width:none;margin:0;background:var(--page)}
+.suite-main .title{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:0 8px 25px rgba(16,40,59,.04)}
+.suite-main .title h1{font-size:31px;margin:5px 0 6px}.suite-main .title p{font-size:9px}.suite-main .title span{font-size:13px}
+.content-tabs{background:transparent;margin:13px 0 9px}.content-tabs button{padding:10px 14px}
+.suite-main .filters{border-radius:11px;padding:9px;box-shadow:0 5px 18px rgba(16,40,59,.025)}
+.suite-main .table-wrap{border-radius:11px;box-shadow:0 8px 24px rgba(16,40,59,.035);overflow:hidden}
+.suite-main th{background:#1e655b;top:66px;padding:8px 7px}.suite-main td{padding:7px}.suite-main tbody tr:nth-child(even) td{background:#f7fafb}
+.suite-main .name{font-size:11px}.suite-main td input,.suite-main td textarea,.suite-main td select{font-size:10px}
+@media(max-width:980px){.suite-shell{grid-template-columns:210px minmax(0,1fr)}.suite-topbar{grid-template-columns:210px 1fr auto}.brand-copy{display:none}.suite-main{padding:16px 12px}.suite-top-actions .cloud-state{display:none}}
+@media(max-width:760px){.suite-shell{display:block}.suite-topbar{grid-template-columns:1fr auto;height:60px}.suite-brand{height:60px}.suite-show-title{display:none}.suite-sidebar{display:none}.suite-main{padding:12px}.suite-top-actions{padding-right:8px}.suite-top-actions button{padding:0 10px}.suite-top-actions button:first-of-type{display:none}}
+@media print{.suite-topbar,.suite-sidebar{display:none!important}.suite-shell{display:block}.suite-main{padding:0}.suite-main .title,.content-tabs,.suite-main .filters{display:none!important}}

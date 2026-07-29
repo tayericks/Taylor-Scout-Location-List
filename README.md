@@ -7,3 +7,8 @@ Current build uses browser local storage for the working prototype. The UI is re
 ## Update 4.0.0
 - Unified Taylor Scout logo and dashboard navigation.
 - Interface and print refinements requested July 29, 2026.
+
+## v6 connected suite styling
+- Restyled Location List to match Taylor Budget and Location Bible.
+- Added dark navy top bar and left sidebar, teal-backed Taylor Scout logo, uniform actions, and suite typography/colors.
+- Preserved connected Scout Log data and final-location printing.
