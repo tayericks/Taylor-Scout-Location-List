@@ -1,8 +1,9 @@
+import { createSharedCookieStorage } from './sharedAuthStorage';
 import { createClient } from '@supabase/supabase-js';
 const url=import.meta.env.VITE_SUPABASE_URL;
 const key=import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const configured=Boolean(url&&key);
-export const supabase=configured?createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+export const supabase=configured?createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:createSharedCookieStorage()}}):null;
 export const getShowId=()=>new URLSearchParams(location.search).get('show')||new URLSearchParams(location.search).get('showId')||'';
 export async function session(){if(!configured)return null;const{data,error}=await supabase.auth.getSession();if(error)throw error;return data.session}
 export async function loadLocations(showId){const{data,error}=await supabase.from('production_locations').select('*').eq('show_id',showId).order('created_at');if(error)throw error;return data||[]}
