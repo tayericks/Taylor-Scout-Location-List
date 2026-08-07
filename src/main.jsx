@@ -27,7 +27,7 @@ const update=(id,key,val)=>setScouts(v=>v.map(r=>r.id===id?{...r,[key]:val}:r));
 return <div className="suite-shell">
 <header className="suite-topbar">
   <button className="suite-brand" onClick={()=>location.href=import.meta.env.VITE_HUB_URL||'https://www.taylorscout.com'} title="Taylor Scout dashboard"><span className="brand-icon-bg"><TaylorScoutLogo compact/></span><span className="brand-copy"><b>TAYLOR SCOUT</b><small>PRODUCTION TOOLS</small></span></button>
-  <div className="suite-show-title">EL DORADO</div>
+  <div className="canonical-center-mark" aria-label="Taylor Scout"></div>
   <div className="suite-top-actions"><span className={`cloud-state ${cloudState==='Sync error'?'error':''}`}>{cloudState}</span><button onClick={()=>window.print()}><Printer/>Print</button><button className="primary" onClick={()=>setEditing({id:uid(),set:'',name:'',address:'',city:'',state:'CA',zip:'',area:'',contact:'',phone:'',email:'',scout:'',date:'',status:'Needed',notes:''})}><Plus/>Add Location</button></div>
 </header>
 <aside className="suite-sidebar">
