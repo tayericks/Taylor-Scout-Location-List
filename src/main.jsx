@@ -1,8 +1,4 @@
-import { mountTaylorScoutCore } from '../../../packages/core/browser.js';
 import React,{useMemo,useState,useEffect} from 'react';
-
-mountTaylorScoutCore({ toolId: 'location-list' });
-
 import{createRoot}from'react-dom/client';
 import{MapPin,Search,Plus,Printer,Home,Save,ClipboardList,MapPinned,X}from'lucide-react';
 import'./styles.css';
