@@ -1,63 +1,333 @@
-import React,{useMemo,useState,useEffect} from 'react';
-import{createRoot}from'react-dom/client';
-import{MapPin,Search,Plus,Printer,Home,Save,ClipboardList,MapPinned,X,Archive,Trash2}from'lucide-react';
-import'./styles.css';
-import{configured,supabase,getShowId,session,loadShowOptions,loadLocations,upsertLocation,archiveLocation,permanentDeleteLocation,subscribeLocations}from'./supabase';
-function TaylorScoutLogo({compact=false}) { return <span className={`ts-logo ${compact?'compact':''}`} aria-label="Taylor Scout"><svg viewBox="0 0 74 92" role="img" aria-hidden="true"><path className="pin-outline" d="M37 3C18 3 5 17 5 36c0 22 17 40 32 53 15-13 32-31 32-53C69 17 56 3 37 3Z"/><path className="mountain" d="M16 39l15-13 8 7 10-10 12 14-12-8-10 10-8-7-15 7Z"/><path className="road" d="M19 69c12-14 24-18 31-27-3 14-12 22-20 31l7 8-9 2-9-14Z"/><path className="star" d="M21 17l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z"/></svg><span className="ts-wordmark"><b>TAYLOR SCOUT</b><small>PRODUCTION TOOLS</small></span></span> }
-const uid=()=>crypto.randomUUID();
-const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
-const newScout=()=>({id:uid(),episodeId:'',episodeName:'',episodes:[],set:'',sets:[],name:'',address:'',city:'',state:'CA',zip:'',area:'',contact:'',phone:'',email:'',scout:'',date:today(),status:'Needed',notes:''});
-const episodeSort=(a,b)=>{const an=Number(String(a).match(/\d+/)?.[0]);const bn=Number(String(b).match(/\d+/)?.[0]);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn;return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'})};
-const rowEpisodes=r=>[...new Set([...(r.episodes||[]),r.episodeName,r.episodeId].filter(Boolean))];
-const physicalKey=r=>{const clean=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,'');const address=clean([r.address,r.city,r.zip].filter(Boolean).join(' '));const name=clean(r.name);return address||((name&&name!=='tbd')?`name:${name}`:`id:${r.id}`)};
-const canonicalizeScouts=rows=>[...rows.reduce((map,row)=>{const key=physicalKey(row);const current=map.get(key);if(!current){map.set(key,row);return map}map.set(key,{...current,episodes:[...new Set([...rowEpisodes(current),...rowEpisodes(row)])],sets:[...new Set([...(current.sets||[]),current.set,...(row.sets||[]),row.set].filter(Boolean))]});return map},new Map()).values()];
-const seedScouts=[
-{id:uid(),set:'Super Mutant Lodge',name:'Big Bear Performing Arts Center',address:'39707 Big Bear Blvd',city:'Big Bear Lake',state:'CA',zip:'92315',area:'Big Bear',contact:'',phone:'',email:'',scout:'',date:'',status:'Researching',notes:''},
-{id:uid(),set:'Super Mutant Lodge',name:'Big Bear Convention Center',address:'42900 Big Bear Blvd',city:'Big Bear Lake',state:'CA',zip:'92315',area:'Big Bear',contact:'',phone:'',email:'',scout:'',date:'',status:'Researching',notes:''},
-{id:uid(),set:'Super Mutant Lodge',name:'San Moritz Lodge',address:'24640 San Moritz Dr',city:'Crestline',state:'CA',zip:'92325',area:'Lake Gregory',contact:'Ben Beitzel',phone:'818-856-0886',email:'ben@mtlocations.com',scout:'Rich Streeter',date:'',status:'Scouted',notes:''},
-{id:uid(),set:'Super Mutant Lodge',name:'Tamarack Lodge Resort',address:'163 Twin Lakes Rd',city:'Mammoth Lakes',state:'CA',zip:'93546',area:'Mammoth',contact:'',phone:'',email:'',scout:'Taylor Erickson',date:'',status:'Submitted',notes:''}
-];
-const seedFinal=[
-{id:uid(),episode:'401',location:'Occidental College',address:'1600 Campus Road',city:'Los Angeles, CA 90041',contacts:'Peg Meehan, Unreel Locations\nT: (323) 953-6189\nE: unreellocations@aol.com',sets:'Int. Clay County Community College Classroom',scenes:'401.37A',key:'Taylor Erickson',dates:'Prep: Monday, July 8\nShoot/Wrap: Tuesday, July 9\nWrap: Wednesday, July 10',support:[{use:'BASECAMP, BREAKFAST CATERING, CREW & BG PARKING',place:'ROSE BOWL - Lot K\n738 West Dr, Pasadena, CA 91105',contact:'Joe Michalek\nC: (626) 524-4751\nE: jmichalek@rosebowlstadium.com'}]},
-{id:uid(),episode:'401',location:'Kent Residence',address:'3751 Cloud Avenue',city:'Glendale, CA 91214',contacts:'Kent Clark, Owner\nC: (818) 689-0691\nE: kent.l.clark@gmail.com',sets:"Int. Bradley's House - Living Room\nInt. Bradley's House - Dining Room\nInt. Bradley's House - Bedroom",scenes:'401.39, 401.54, 401.53, 401.49',key:'Tiffany Le',dates:'Prep: Friday, July 5; Monday, July 8\nShoot: Tuesday, July 9; Wednesday, July 10\nWrap: Thursday, July 11; Friday, July 12',support:[]}
-];
-const statuses=['Needed','Researching','Contacted','Scout Scheduled','Scouted','Submitted','Director Approved','On Hold','Rejected','Selected'];
-function load(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}}
-function dbToScout(x){return{id:x.id,showId:x.show_id,episodeId:x.episode_id||'',episodeName:x.episode_name||'',episodes:x.metadata?.episodes||[],set:x.set_name||'',sets:x.metadata?.sets||[],name:x.location_name||'',address:x.address||'',city:x.city||'',state:x.state||'CA',zip:x.postal_code||'',placeId:x.metadata?.place_id||'',latitude:x.metadata?.latitude??null,longitude:x.metadata?.longitude??null,area:x.area||'',contact:x.contact_name||'',phone:x.contact_phone||'',email:x.contact_email||'',scout:x.scout_name||'',date:x.scout_date||'',status:x.status||'Needed',notes:x.notes||'',isFinal:Boolean(x.is_final)}}
-function App(){const showId=getShowId();const[cloudState,setCloudState]=useState(configured?'Connecting…':'Saved locally');const[tab,setTab]=useState('tracker');const[scouts,setScouts]=useState(()=>load('ts-location-scouts',seedScouts));const[finals,setFinals]=useState(()=>load('ts-location-finals',seedFinal));const[showOptions,setShowOptions]=useState({episodes:[],scouts:[]});const[q,setQ]=useState('');const[filters,setFilters]=useState({set:'',city:'',scout:'',status:'',date:''});const[selectedEpisode,setSelectedEpisode]=useState('');const[editing,setEditing]=useState(null);const[sort,setSort]=useState('name-asc');const[pendingCloudRows,setPendingCloudRows]=useState(null);
-useEffect(()=>localStorage.setItem('ts-location-scouts',JSON.stringify(scouts)),[scouts]);useEffect(()=>localStorage.setItem('ts-location-finals',JSON.stringify(finals)),[finals]);
-useEffect(()=>{if(!configured||!showId)return;loadShowOptions(showId).then(setShowOptions).catch(e=>console.error('Show options failed to load',e))},[showId]);
-useEffect(()=>{if(!configured||!showId)return;let live=true;session().then(s=>{if(!s){setCloudState('Sign in required');return}return loadLocations(showId)}).then(rows=>{if(!live||!rows)return;const cloud=canonicalizeScouts(rows.map(dbToScout).filter(x=>!x.isFinal));setScouts(cloud);setCloudState('Saved')}).catch(e=>{console.error('Location List sync failed',e);setCloudState(e?.message?`Sync error: ${e.message}`:'Sync error')});const off=subscribeLocations(showId,()=>loadLocations(showId).then(rows=>{if(!live)return;const next=canonicalizeScouts(rows.map(dbToScout).filter(x=>!x.isFinal));const active=document.activeElement;const editingNow=active&&['INPUT','TEXTAREA','SELECT'].includes(active.tagName);if(editingNow){setPendingCloudRows(next);setCloudState('Updates available')}else{setScouts(next);setCloudState('Saved')}}).catch(e=>console.error('Location List realtime refresh failed',e)));return()=>{live=false;off()}},[showId]);
-useEffect(()=>{if(!configured||!showId||cloudState==='Sign in required')return;const t=setTimeout(async()=>{try{for(const r of scouts)await upsertLocation({...r,showId});setCloudState('Saved')}catch(e){setCloudState('Sync error')}},15000);return()=>clearTimeout(t)},[scouts,showId]);
-const episodes=useMemo(()=>[...new Set(scouts.flatMap(rowEpisodes))].sort(episodeSort),[scouts]);
-const filtered=useMemo(()=>{const rows=scouts.filter(r=>{const hay=Object.values(r).flat().join(' ').toLowerCase();return(!selectedEpisode||rowEpisodes(r).includes(selectedEpisode))&&hay.includes(q.toLowerCase())&&(!filters.set||r.set===filters.set||(r.sets||[]).includes(filters.set))&&(!filters.city||r.city===filters.city)&&(!filters.scout||r.scout===filters.scout)&&(!filters.status||r.status===filters.status)&&(!filters.date||r.date===filters.date)});return [...rows].sort((a,b)=>{if(sort==='name-asc')return(a.name||'').localeCompare(b.name||'');if(sort==='name-desc')return(b.name||'').localeCompare(a.name||'');if(sort==='date-new')return(b.date||'').localeCompare(a.date||'');if(sort==='date-old')return(a.date||'').localeCompare(b.date||'');if(sort==='city')return(a.city||'').localeCompare(b.city||'');if(sort==='scout')return(a.scout||'').localeCompare(b.scout||'');return 0})},[scouts,q,filters,sort,selectedEpisode]);
-const update=(id,key,val)=>setScouts(v=>v.map(r=>r.id===id?{...r,[key]:val}:r));const promote=r=>{setFinals(v=>v.some(x=>x.sourceScoutId===r.id)?v:[...v,{id:uid(),sourceScoutId:r.id,episode:'',location:r.name,address:r.address,city:[r.city,r.state,r.zip].filter(Boolean).join(', '),contacts:[r.contact,r.phone,r.email].filter(Boolean).join('\n'),sets:r.set,scenes:'',key:r.scout,dates:'',support:[]}])};const changeStatus=(r,val)=>{update(r.id,'status',val);if(val==='Selected')promote({...r,status:val})};
-const archiveRecord=async r=>{if(!configured||!showId||!r?.showId){alert('Archive is available for connected shared locations after they are saved.');return}if(!confirm(`Archive “${r.name||'this location'}”?\n\nIts Budget, Bible, Security, vendor orders, and history will be preserved.`))return;setCloudState('Archiving…');try{await archiveLocation(showId,r.id,'Archived from Location List');setScouts(v=>v.filter(x=>x.id!==r.id));setEditing(null);setCloudState('Saved')}catch(e){console.error(e);setCloudState('Sync error');alert(e.message||'Archive failed')}};
-const permanentlyDeleteRecord=async r=>{if(!configured||!showId||!r?.showId){alert('Permanent delete is available only for connected shared locations.');return}if(!confirm(`PERMANENTLY DELETE “${r.name||'this location'}”?\n\nThis removes the canonical location and its scoped Budget/Bible records. A deletion tombstone is retained. This cannot be undone.`))return;const typed=prompt(`Type the exact canonical Location ID to continue:\n\n${r.id}`,'');if(typed!==r.id){if(typed!==null)alert('Location ID did not match. Nothing was deleted.');return}if(!confirm('Final confirmation: permanently delete this location now?'))return;setCloudState('Deleting…');try{await permanentDeleteLocation(showId,r.id,{reason:'Permanent delete from Location List',confirmationLocationId:typed});setScouts(v=>v.filter(x=>x.id!==r.id));setEditing(null);setCloudState('Saved')}catch(e){console.error(e);setCloudState('Sync error');alert(e.message||'Permanent delete failed')}};
-return <div className="suite-shell">
-<header className="suite-topbar">
-  <button className="suite-brand" onClick={()=>location.href=import.meta.env.VITE_HUB_URL||'https://www.taylorscout.com'} title="Taylor Scout dashboard"><span className="brand-icon-bg"><TaylorScoutLogo compact/></span><span className="brand-copy"><b>TAYLOR SCOUT</b><small>PRODUCTION TOOLS</small></span></button>
-  <div className="canonical-center-mark" aria-label="Taylor Scout"></div>
-  <div className="suite-top-actions"><span className={`cloud-state ${cloudState==='Sync error'?'error':''}`}>{cloudState}</span><button onClick={()=>window.print()}><Printer/>Print</button><button className="primary" onClick={()=>setEditing(newScout())}><Plus/>Add Location</button></div>
-</header>
-<aside className="suite-sidebar">
-  <div className="sidebar-show"><h2>EL DORADO</h2><span>LOCATION LIST</span></div>
-  <button className="sidebar-new" onClick={()=>setEditing(newScout())}><Plus/>New Location</button>
-  <div className="sidebar-label">VIEWS</div>
-  <button className={`sidebar-link ${tab==='tracker'?'active':''}`} onClick={()=>setTab('tracker')}><ClipboardList/>Scout Tracker</button>
-  <button className={`sidebar-link ${tab==='final'?'active':''}`} onClick={()=>setTab('final')}><MapPinned/>Final Locations</button>
-  <div className="sidebar-label">EPISODES</div>
-  <button className={`episode-side ${selectedEpisode===''?'active':''}`} onClick={()=>{setSelectedEpisode('');setTab('tracker')}}><span>All Episodes</span><b>{scouts.length}</b></button>
-  {episodes.map(ep=><button className={`episode-side ${selectedEpisode===ep?'active':''}`} key={ep} onClick={()=>{setSelectedEpisode(ep);setTab('tracker')}}><span>{ep}</span><b>{scouts.filter(r=>rowEpisodes(r).includes(ep)).length}</b></button>)}
-  <div className="sidebar-spacer"/>
-  <button className="sidebar-link" onClick={()=>location.href=import.meta.env.VITE_HUB_URL||'https://www.taylorscout.com'}><Home/>Show Dashboard</button>
-</aside>
-<main className="suite-main">
-  <div className="title"><div><p>LOCATIONS DEPARTMENT</p><h1>{selectedEpisode?`Episode ${selectedEpisode}`:'Location List'}</h1><span>{selectedEpisode?'Showing only locations attached to this episode.':'Scout candidates, approvals, and the final production location record.'}</span></div></div>
-  {tab==='tracker'?<><section className="filters"><label className="search"><Search/><input placeholder="Search name, address, set, city, scout, notes…" value={q} onChange={e=>setQ(e.target.value)}/></label>{['set','city','scout','status'].map(k=><select key={k} value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})}><option value="">All {k}s</option>{[...new Set(scouts.map(r=>r[k]).filter(Boolean))].sort().map(x=><option key={x}>{x}</option>)}</select>)}<input type="date" value={filters.date} onChange={e=>setFilters({...filters,date:e.target.value})}/><select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort locations"><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="date-new">Newest scout date</option><option value="date-old">Oldest scout date</option><option value="city">City</option><option value="scout">Scout</option></select>{pendingCloudRows&&<button className="refresh-updates" onClick={()=>{setScouts(pendingCloudRows);setPendingCloudRows(null);setCloudState('Saved')}}>Refresh updates</button>}</section><div className="table-wrap"><table><thead><tr><th>Set</th><th>Name / Address</th><th>Property Contact</th><th>Area</th><th>Scouted By</th><th>Scout Date</th><th>Status</th><th>Notes</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}><td><input value={r.set} onChange={e=>update(r.id,'set',e.target.value)}/></td><td><button className="name" onClick={()=>setEditing(r)}>{r.name||'Untitled'}</button><small>{r.address}<br/>{r.city}, {r.state} {r.zip}</small></td><td><input value={r.contact} placeholder="Contact" onChange={e=>update(r.id,'contact',e.target.value)}/><small>{r.phone}{r.email&&<><br/>{r.email}</>}</small></td><td><input value={r.area} onChange={e=>update(r.id,'area',e.target.value)}/></td><td><input value={r.scout} onChange={e=>update(r.id,'scout',e.target.value)}/></td><td><input type="date" value={r.date} onChange={e=>update(r.id,'date',e.target.value)}/></td><td><select className={'status s-'+r.status.replaceAll(' ','-').toLowerCase()} value={r.status} onChange={e=>changeStatus(r,e.target.value)}>{statuses.map(s=><option key={s}>{s}</option>)}</select></td><td><textarea value={r.notes} onChange={e=>update(r.id,'notes',e.target.value)}/></td></tr>)}</tbody></table></div></>:<FinalList rows={finals} setRows={setFinals} q={q} setQ={setQ}/>}</main>
-{editing&&<Editor row={editing} showOptions={showOptions} onClose={()=>setEditing(null)} onSave={async r=>{const key=physicalKey(r);const match=scouts.find(x=>x.id!==r.id&&key&&!key.startsWith('id:')&&physicalKey(x)===key);const next=match?{...match,...r,id:match.id,showId:match.showId,episodes:[...new Set([...rowEpisodes(match),...rowEpisodes(r)])],sets:[...new Set([...(match.sets||[]),match.set,...(r.sets||[]),r.set].filter(Boolean))]}:{...r,showId:r.showId||showId,episodes:rowEpisodes(r),sets:[...new Set([...(r.sets||[]),r.set].filter(Boolean))]};setCloudState('Saving…');try{if(configured&&showId)await upsertLocation(next);setScouts(v=>v.filter(x=>x.id!==r.id||r.id===next.id).map(x=>x.id===next.id?next:x).concat(v.some(x=>x.id===next.id)?[]:[next]));setCloudState('Saved');setEditing(null);if(match)alert(`Added this episode/set to ${match.name}. No duplicate location was created.`)}catch(e){console.error(e);setCloudState('Sync error');alert(e.message||'Location could not be saved')}}} onArchive={archiveRecord} onPermanentDelete={permanentlyDeleteRecord}/>}</div>}
-function AddressAutocomplete({row,setRow}){const[items,setItems]=useState([]);const[busy,setBusy]=useState(false);useEffect(()=>{const query=row.address?.trim();if(!query||query.length<4||row.placeId){setItems([]);return}const ctl=new AbortController();const t=setTimeout(async()=>{setBusy(true);try{const res=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`,{signal:ctl.signal,headers:{'Accept-Language':'en-US'}});const data=await res.json();setItems(Array.isArray(data)?data:[])}catch(e){if(e.name!=='AbortError')setItems([])}finally{setBusy(false)}},350);return()=>{clearTimeout(t);ctl.abort()}},[row.address,row.placeId]);const choose=x=>{const a=x.address||{};const street=[a.house_number,a.road||a.pedestrian||a.highway].filter(Boolean).join(' ');const city=a.city||a.town||a.village||a.hamlet||a.county||'';const state=(a['ISO3166-2-lvl4']||'').split('-')[1]||a.state||'CA';const area=a.neighbourhood||a.suburb||a.city_district||a.borough||city||a.county||'';setRow({...row,address:street||x.display_name,city,state,zip:a.postcode||'',area,placeId:String(x.place_id||''),latitude:Number(x.lat),longitude:Number(x.lon)});setItems([])};return <label className="address-field">Smart address<input autoComplete="off" value={row.address||''} placeholder="Start typing an address…" onChange={e=>setRow({...row,address:e.target.value,placeId:''})}/>{(busy||items.length>0)&&<div className="address-suggestions">{busy&&<span>Checking addresses…</span>}{items.map(x=><button type="button" key={x.place_id} onClick={()=>choose(x)}><MapPin/>{x.display_name}</button>)}</div>}<small>Select a suggested address to fill city, state, ZIP and area.</small></label>}
-function Editor({row,showOptions,onClose,onSave,onArchive,onPermanentDelete}){const[r,setR]=useState({...row,date:row.date||today()});const connected=Boolean(row.showId);const episodeOptions=showOptions.episodes||[];const scoutOptions=showOptions.scouts||[];const selectedEpisode=episodeOptions.find(e=>e.id===r.episodeId||e.name===r.episodeName||e.name?.replace(/^Episode\s+/i,'')===r.episodeName)?.id||'';const scoutNames=[...new Set([...scoutOptions.map(x=>x.name),r.scout].filter(Boolean))];return <div className="modal-bg"><div className="modal"><button className="close" onClick={onClose}><X/></button><p>SCOUT RECORD</p><h2>{r.name||'New Location'}</h2><div className="form"><label>Episode<select value={selectedEpisode} onChange={e=>{const ep=episodeOptions.find(x=>x.id===e.target.value);setR({...r,episodeId:ep?.id||'',episodeName:ep?.name?.replace(/^Episode\s+/i,'')||''})}}><option value="">Select episode</option>{episodeOptions.map(ep=><option key={ep.id} value={ep.id}>{ep.name}</option>)}</select></label><label>Set / set name<input value={r.set||''} onChange={e=>setR({...r,set:e.target.value})}/></label><label>Location name<input value={r.name||''} onChange={e=>setR({...r,name:e.target.value})}/></label><AddressAutocomplete row={r} setRow={setR}/>{['city','state','zip','area','contact','phone','email'].map(k=><label key={k}>{k.replace(/([A-Z])/g,' $1')}<input value={r[k]||''} onChange={e=>setR({...r,[k]:e.target.value})}/></label>)}<label>Scout<select value={r.scout||''} onChange={e=>setR({...r,scout:e.target.value})}><option value="">Select scout</option>{scoutNames.map(name=><option key={name}>{name}</option>)}</select></label><label>Scout date<input type="date" value={r.date||''} onChange={e=>setR({...r,date:e.target.value})}/></label><label>Status<select value={r.status} onChange={e=>setR({...r,status:e.target.value})}>{statuses.map(s=><option key={s}>{s}</option>)}</select></label><label className="full">Notes<textarea value={r.notes||''} onChange={e=>setR({...r,notes:e.target.value})}/></label></div><button className="primary save" onClick={()=>onSave(r)}><Save/> Save Location</button>{connected&&<div style={{display:'flex',gap:8,marginTop:14,paddingTop:14,borderTop:'1px solid #d9dee5'}}><button type="button" onClick={()=>onArchive(row)} style={{display:'inline-flex',alignItems:'center',gap:6}}><Archive size={16}/> Archive Location</button><button type="button" onClick={()=>onPermanentDelete(row)} style={{display:'inline-flex',alignItems:'center',gap:6,marginLeft:'auto',color:'#9b1c1c'}}><Trash2 size={16}/> Permanent Delete</button></div>} {connected&&<small style={{display:'block',marginTop:8,color:'#64748b'}}>Canonical Location ID: {row.id}</small>}</div></div>}
-function FinalList({rows,setRows,q,setQ}){const visible=rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));const groups=[...new Set(visible.map(r=>r.episode||'Unassigned'))].sort();return <section className="final"><div className="final-tools"><label className="search"><Search/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search location, address, set, scene, key…"/></label><button className="primary" onClick={()=>setRows(v=>[...v,{id:uid(),episode:'',location:'New Location',address:'',city:'',contacts:'',sets:'',scenes:'',key:'',dates:'',support:[]}])}><Plus/> Add Final Location</button></div><div className="print-title">EL DORADO — FINAL LOCATION LIST</div>{groups.map(ep=><section className="episode-section" key={ep}><div className="episode-break"><span>EPISODE</span><h2 contentEditable suppressContentEditableWarning>{ep}</h2></div>{visible.filter(r=>(r.episode||'Unassigned')===ep).map(r=><article className="location-block" key={r.id}><div className="bar"><span>LOCATION INFORMATION</span><span>EPISODE / SCENE NAMES / NUMBERS</span><span>LOCATION DEPT CONTACT & DATE(S)</span></div><div className="cols"><div><h3 contentEditable suppressContentEditableWarning onBlur={e=>editFinal(setRows,r.id,'location',e.currentTarget.innerText)}>{r.location}</h3><p contentEditable suppressContentEditableWarning onBlur={e=>editFinal(setRows,r.id,'address',e.currentTarget.innerText)}>{r.address}</p><p contentEditable suppressContentEditableWarning onBlur={e=>editFinal(setRows,r.id,'city',e.currentTarget.innerText)}>{r.city}</p><pre contentEditable suppressContentEditableWarning onBlur={e=>editFinal(setRows,r.id,'contacts',e.currentTarget.innerText)}>{r.contacts}</pre></div><div><label className="episode-edit">Episode<input value={r.episode||''} onChange={e=>editFinal(setRows,r.id,'episode',e.target.value)}/></label><p><b>{r.sets}</b></p><p>Scenes: {r.scenes}</p></div><div><p><b>{r.key}</b></p><pre>{r.dates}</pre></div></div>{r.support.map((s,i)=><div className="support" key={i}><div>{s.use}</div><div>{s.place}</div><div>{s.contact}</div></div>)}</article>)}</section>)}</section>}
-function editFinal(setRows,id,key,val){setRows(v=>v.map(r=>r.id===id?{...r,[key]:val}:r))}
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Archive, ClipboardList, Home, Link2, MapPin, MapPinned, Plus, Printer, Save, Search, Trash2, X } from 'lucide-react';
+import './styles.css';
+import {
+  archiveLocation, configured, getShowId, loadLocationWorkspace, permanentDeleteLocation,
+  saveLocationRecord, session, subscribeLocations, supabase
+} from './supabase';
+
+function TaylorScoutLogo({ compact = false }) {
+  return <span className={`ts-logo ${compact ? 'compact' : ''}`} aria-label="Taylor Scout"><svg viewBox="0 0 74 92" role="img" aria-hidden="true"><path className="pin-outline" d="M37 3C18 3 5 17 5 36c0 22 17 40 32 53 15-13 32-31 32-53C69 17 56 3 37 3Z"/><path className="mountain" d="M16 39l15-13 8 7 10-10 12 14-12-8-10 10-8-7-15 7Z"/><path className="road" d="M19 69c12-14 24-18 31-27-3 14-12 22-20 31l7 8-9 2-9-14Z"/><path className="star" d="M21 17l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z"/></svg><span className="ts-wordmark"><b>TAYLOR SCOUT</b><small>PRODUCTION TOOLS</small></span></span>;
+}
+
+const uid = () => crypto.randomUUID();
+const today = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+const statuses = ['Needed','Researching','Contacted','Scout Scheduled','Scouted','Submitted','Director Approved','On Hold','Rejected','Selected'];
+const emptyWorkspace = { show: { name: 'Production', logo: '', season: '', theme: null }, units: [], sets: [], team: [], locations: [] };
+
+function newLocation(showId) {
+  return {
+    id: uid(), showId, links: [], set: '', name: '', address: '', city: '', state: 'CA', zip: '', area: '',
+    placeId: '', latitude: null, longitude: null, contact: '', phone: '', email: '', scout: '', date: today(),
+    status: 'Needed', notes: '', isFinal: false, metadata: {}
+  };
+}
+
+function loadLocal(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+}
+
+function physicalLocationKey(row) {
+  const clean = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const address = clean([row.address,row.city,row.state,row.zip].filter(Boolean).join(' '));
+  const name = clean(row.name);
+  return address || (name && name !== 'tbd' ? `name:${name}` : '');
+}
+
+function mergeCanonicalLinks(...groups) {
+  const unique = new Map();
+  groups.flat().filter(Boolean).forEach(link => unique.set(`${link.setId}:${link.unitId || ''}`, link));
+  return [...unique.values()];
+}
+
+function consolidatePhysicalLocations(rows) {
+  return [...rows.reduce((grouped,row) => {
+    const key=physicalLocationKey(row)||`id:${row.id}`;
+    const current=grouped.get(key);
+    if(!current){grouped.set(key,row);return grouped;}
+    grouped.set(key,{
+      ...current,
+      links:mergeCanonicalLinks(current.links||[],row.links||[]),
+      metadata:{
+        ...(current.metadata||{}),
+        grouped_location_ids:[...new Set([...(current.metadata?.grouped_location_ids||[]),current.id,row.id])]
+      }
+    });
+    return grouped;
+  },new Map()).values()];
+}
+
+function App() {
+  const showId = getShowId();
+  const localKey = `ts-location-scouts:${showId || 'local'}`;
+  const [workspace, setWorkspace] = useState(emptyWorkspace);
+  const [scouts, setScouts] = useState(() => loadLocal(localKey, []));
+  const [finals, setFinals] = useState(() => loadLocal(`ts-location-finals:${showId || 'local'}`, []));
+  const [cloudState, setCloudState] = useState(configured ? 'Connecting…' : 'Saved locally');
+  const [tab, setTab] = useState('tracker');
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({ set: '', city: '', scout: '', status: '', date: '' });
+  const [episodeFilter, setEpisodeFilter] = useState('all');
+  const [editing, setEditing] = useState(null);
+  const [sort, setSort] = useState('name-asc');
+  const [pendingWorkspace, setPendingWorkspace] = useState(null);
+
+  function applyWorkspace(next) {
+    setWorkspace(next);
+    setScouts(consolidatePhysicalLocations(next.locations.filter(location => !location.isFinal)));
+    setCloudState('Saved');
+  }
+
+  useEffect(() => { localStorage.setItem(localKey, JSON.stringify(scouts)); }, [scouts, localKey]);
+  useEffect(() => { localStorage.setItem(`ts-location-finals:${showId || 'local'}`, JSON.stringify(finals)); }, [finals, showId]);
+  useEffect(() => {
+    if (!configured || !showId) return;
+    let live = true;
+    session().then(current => {
+      if (!current) { setCloudState('Sign in required'); return null; }
+      return loadLocationWorkspace(showId);
+    }).then(next => { if (live && next) applyWorkspace(next); }).catch(error => { console.error(error); setCloudState(`Sync error: ${error?.message || 'Unable to load'}`); });
+    const unsubscribe = subscribeLocations(showId, async () => {
+      try {
+        const next = await loadLocationWorkspace(showId);
+        if (!live) return;
+        const active = document.activeElement;
+        const typing = editing || (active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName));
+        if (typing) { setPendingWorkspace(next); setCloudState('Updates available'); }
+        else applyWorkspace(next);
+      } catch (error) { console.error('Location List realtime refresh failed', error); }
+    });
+    return () => { live = false; unsubscribe(); };
+  }, [showId, Boolean(editing)]);
+
+  const setMap = useMemo(() => new Map(workspace.sets.map(set => [set.id, set])), [workspace.sets]);
+  const unitMap = useMemo(() => new Map(workspace.units.map(unit => [unit.id, unit])), [workspace.units]);
+  const filtered = useMemo(() => {
+    const rows = scouts.filter(row => {
+      const linkText = (row.links || []).map(link => `${link.setName} ${link.unitName} ${link.unitCode}`).join(' ');
+      const haystack = `${Object.values(row).filter(value => typeof value !== 'object').join(' ')} ${linkText}`.toLowerCase();
+      const setLabels = (row.links || []).map(link => link.setName);
+      return haystack.includes(query.toLowerCase())
+        && (episodeFilter === 'all' || (row.links || []).some(link => link.unitId === episodeFilter))
+        && (!filters.set || setLabels.includes(filters.set) || row.set === filters.set)
+        && (!filters.city || row.city === filters.city)
+        && (!filters.scout || row.scout === filters.scout)
+        && (!filters.status || row.status === filters.status)
+        && (!filters.date || row.date === filters.date);
+    });
+    return [...rows].sort((a,b) => {
+      if (sort === 'name-asc') return (a.name || '').localeCompare(b.name || '');
+      if (sort === 'name-desc') return (b.name || '').localeCompare(a.name || '');
+      if (sort === 'date-new') return (b.date || '').localeCompare(a.date || '');
+      if (sort === 'date-old') return (a.date || '').localeCompare(b.date || '');
+      if (sort === 'city') return (a.city || '').localeCompare(b.city || '');
+      if (sort === 'scout') return (a.scout || '').localeCompare(b.scout || '');
+      return 0;
+    });
+  }, [scouts, query, filters, sort, episodeFilter]);
+
+  function update(id, key, value) {
+    setScouts(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
+  }
+  async function persist(row) {
+    if (!configured || !showId) { setCloudState('Saved locally'); return row; }
+    setCloudState('Saving…');
+    try { await saveLocationRecord(showId, row); setCloudState('Saved'); return row; }
+    catch (error) { setCloudState(`Sync error: ${error?.message || 'Save failed'}`); throw error; }
+  }
+  async function saveEditor(row) {
+    const key = physicalLocationKey(row);
+    const match = !row.showId && key ? scouts.find(item => item.id !== row.id && physicalLocationKey(item) === key) : null;
+    const next = match ? {
+      ...match, ...row, id: match.id, showId: match.showId,
+      links: mergeCanonicalLinks(match.links || [], row.links || [])
+    } : row;
+    await persist(next);
+    setScouts(current => {
+      const withoutUnsavedDuplicate = current.filter(item => item.id !== row.id || item.id === next.id);
+      return withoutUnsavedDuplicate.some(item => item.id === next.id)
+        ? withoutUnsavedDuplicate.map(item => item.id === next.id ? next : item)
+        : [next, ...withoutUnsavedDuplicate];
+    });
+    if (match) setCloudState(`Saved · added to ${match.name}`);
+    setEditing(null);
+  }
+  async function saveInline(row) {
+    try { await persist(row); } catch (error) { console.error(error); }
+  }
+  function promote(row) {
+    setFinals(current => current.some(item => item.sourceScoutId === row.id) ? current : [...current, {
+      id: uid(), sourceScoutId: row.id, episode: row.links?.[0]?.unitCode || '', location: row.name,
+      address: row.address, city: [row.city,row.state,row.zip].filter(Boolean).join(', '),
+      contacts: [row.contact,row.phone,row.email].filter(Boolean).join('\n'),
+      sets: row.links?.map(link => link.setName).filter(Boolean).join('\n') || row.set, scenes: '', key: row.scout, dates: '', support: []
+    }]);
+  }
+  async function changeStatus(row, value) {
+    const next = { ...row, status: value };
+    update(row.id, 'status', value);
+    if (value === 'Selected') promote(next);
+    try { await persist(next); } catch (error) { console.error(error); }
+  }
+
+  async function archiveRecord(row) {
+    if (!configured || !showId || !row?.showId) return alert('Archive is available after the shared location is saved.');
+    if (!confirm(`Archive “${row.name || 'this location'}”?\n\nBudget, Bible, Security, vendor orders, and history will be preserved.`)) return;
+    setCloudState('Archiving…');
+    try { await archiveLocation(showId,row.id,'Archived from Location List'); setScouts(current=>current.filter(item=>item.id!==row.id)); setEditing(null); setCloudState('Saved'); }
+    catch (error) { setCloudState('Sync error'); alert(error.message || 'Archive failed'); }
+  }
+  async function permanentlyDeleteRecord(row) {
+    if (!configured || !showId || !row?.showId) return alert('Permanent delete is available only for connected shared locations.');
+    if (!confirm(`PERMANENTLY DELETE “${row.name || 'this location'}”?\n\nThis removes the canonical location and scoped Budget/Bible records. A deletion tombstone is retained.`)) return;
+    const typed = prompt(`Type the exact canonical Location ID to continue:\n\n${row.id}`, '');
+    if (typed !== row.id) return typed !== null && alert('Location ID did not match. Nothing was deleted.');
+    if (!confirm('Final confirmation: permanently delete this location now?')) return;
+    setCloudState('Deleting…');
+    try { await permanentDeleteLocation(showId,row.id,{reason:'Permanent delete from Location List',confirmationLocationId:typed}); setScouts(current=>current.filter(item=>item.id!==row.id)); setEditing(null); setCloudState('Saved'); }
+    catch (error) { setCloudState('Sync error'); alert(error.message || 'Permanent delete failed'); }
+  }
+
+  const theme = workspace.show.theme || {};
+  const shellStyle = { '--ts-navy': theme.primary || '#061f33', '--ts-navy-2': theme.secondary || '#0b2e46', '--ts-teal': theme.accent || '#2fb5b2', '--ts-font': theme.font || 'Inter' };
+  const setOptions = [...new Set(scouts.flatMap(row => (row.links || []).map(link => link.setName)).concat(scouts.map(row => row.set)).filter(Boolean))].sort();
+  const openNew = () => setEditing(newLocation(showId));
+
+  return <div className="suite-shell" style={shellStyle}>
+    <header className="suite-topbar">
+      <button className="suite-brand" onClick={()=>location.href=import.meta.env.VITE_HUB_URL||'https://www.taylorscout.com'} title="Taylor Scout dashboard"><span className="brand-icon-bg"><TaylorScoutLogo compact/></span><span className="brand-copy"><b>TAYLOR SCOUT</b><small>PRODUCTION TOOLS</small></span></button>
+      <div className="canonical-center-mark" aria-label="Taylor Scout"/>
+      <div className="suite-top-actions"><span className={`cloud-state ${cloudState.startsWith('Sync error')?'error':''}`}>{cloudState}</span><button onClick={()=>window.print()}><Printer/>Print</button><button className="primary" onClick={openNew}><Plus/>Add Location</button></div>
+    </header>
+    <aside className="suite-sidebar">
+      <div className="sidebar-show">{workspace.show.logo&&<img className="sidebar-show-logo" src={workspace.show.logo} alt=""/>}<h2>{workspace.show.name}</h2><span>LOCATION LIST</span></div>
+      <button className="sidebar-new" onClick={openNew}><Plus/>New Location</button>
+      <div className="sidebar-label">VIEWS</div>
+      <button className={`sidebar-link ${tab==='tracker'?'active':''}`} onClick={()=>setTab('tracker')}><ClipboardList/>Scout Tracker</button>
+      <button className={`sidebar-link ${tab==='final'?'active':''}`} onClick={()=>setTab('final')}><MapPinned/>Final Locations</button>
+      <div className="sidebar-label">EPISODES / UNITS</div>
+      <button className={`episode-side episode-filter ${episodeFilter==='all'?'active':''}`} onClick={()=>setEpisodeFilter('all')}><span>All Episodes</span><b>{scouts.length}</b></button>
+      {workspace.units.map(unit => <button className={`episode-side episode-filter ${episodeFilter===unit.id?'active':''}`} key={unit.id} onClick={()=>setEpisodeFilter(unit.id)}><span>{unit.code || unit.name}</span><b>{scouts.filter(row=>(row.links||[]).some(link=>link.unitId===unit.id)).length}</b></button>)}
+      <div className="sidebar-spacer"/>
+      <button className="sidebar-link" onClick={()=>location.href=import.meta.env.VITE_HUB_URL||'https://www.taylorscout.com'}><Home/>Show Dashboard</button>
+    </aside>
+    <main className="suite-main">
+      <div className="title"><div><p>LOCATIONS DEPARTMENT</p><h1>Location List</h1><span>Choose an episode, then select only the canonical sets entered in Set List.</span></div></div>
+      {tab === 'tracker' ? <>
+        <section className="filters">
+          <label className="search"><Search/><input placeholder="Search name, address, set, city, scout, notes…" value={query} onChange={event=>setQuery(event.target.value)}/></label>
+          <select value={filters.set} onChange={event=>setFilters({...filters,set:event.target.value})}><option value="">All sets</option>{setOptions.map(value=><option key={value}>{value}</option>)}</select>
+          {['city','scout','status'].map(keyName => <select key={keyName} value={filters[keyName]} onChange={event=>setFilters({...filters,[keyName]:event.target.value})}><option value="">All {keyName}s</option>{[...new Set(scouts.map(row=>row[keyName]).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}</select>)}
+          <input type="date" value={filters.date} onChange={event=>setFilters({...filters,date:event.target.value})}/>
+          <select value={sort} onChange={event=>setSort(event.target.value)} aria-label="Sort locations"><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="date-new">Newest scout date</option><option value="date-old">Oldest scout date</option><option value="city">City</option><option value="scout">Scout</option></select>
+          {pendingWorkspace&&<button className="refresh-updates" onClick={()=>{applyWorkspace(pendingWorkspace);setPendingWorkspace(null)}}>Refresh updates</button>}
+        </section>
+        <div className="table-wrap"><table><thead><tr><th>Set List links</th><th>Name / Address</th><th>Property Contact</th><th>Area</th><th>Scouted By</th><th>Scout Date</th><th>Status</th><th>Notes</th></tr></thead><tbody>{filtered.map(row => <tr key={row.id}>
+          <td><button className="linked-set-cell" onClick={()=>setEditing(row)}>{row.links?.length ? row.links.map(link=><span key={`${link.setId}:${link.unitId}`}><b>{link.unitCode || link.unitName || 'All'}</b>{link.setName}</span>) : <span className="unlinked"><Link2 size={12}/>{row.set || 'Choose set'}</span>}</button></td>
+          <td><button className="name" onClick={()=>setEditing(row)}>{row.name||'Untitled'}</button><small>{row.address}<br/>{[row.city,row.state,row.zip].filter(Boolean).join(', ')}</small></td>
+          <td><input value={row.contact} placeholder="Contact" onChange={event=>update(row.id,'contact',event.target.value)} onBlur={event=>saveInline({...row,contact:event.target.value})}/><small>{row.phone}{row.email&&<><br/>{row.email}</>}</small></td>
+          <td><input value={row.area} onChange={event=>update(row.id,'area',event.target.value)} onBlur={event=>saveInline({...row,area:event.target.value})}/></td>
+          <td><select value={row.scout} onChange={event=>{const next={...row,scout:event.target.value};update(row.id,'scout',event.target.value);saveInline(next)}}><option value="">Unassigned</option>{row.scout&&!workspace.team.some(member=>(member.display_name||member.email)===row.scout)&&<option>{row.scout}</option>}{workspace.team.map(member=><option key={member.user_id} value={member.display_name||member.email}>{member.display_name||member.email}</option>)}</select></td>
+          <td><input type="date" value={row.date} onChange={event=>update(row.id,'date',event.target.value)} onBlur={event=>saveInline({...row,date:event.target.value})}/></td>
+          <td><select className={'status s-'+row.status.replaceAll(' ','-').toLowerCase()} value={row.status} onChange={event=>changeStatus(row,event.target.value)}>{statuses.map(status=><option key={status}>{status}</option>)}</select></td>
+          <td><textarea value={row.notes} onChange={event=>update(row.id,'notes',event.target.value)} onBlur={event=>saveInline({...row,notes:event.target.value})}/></td>
+        </tr>)}</tbody></table></div>
+      </> : <FinalList rows={finals} setRows={setFinals} query={query} setQuery={setQuery}/>}</main>
+    {editing&&<Editor row={editing} units={workspace.units} sets={workspace.sets} team={workspace.team} setMap={setMap} unitMap={unitMap} onClose={()=>setEditing(null)} onSave={saveEditor} onArchive={archiveRecord} onPermanentDelete={permanentlyDeleteRecord}/>}
+  </div>;
+}
+
+function AddressAutocomplete({ record, onChange }) {
+  const [items,setItems]=useState([]);
+  const [busy,setBusy]=useState(false);
+
+  useEffect(()=>{
+    const query=record.address?.trim();
+    if(!query||query.length<4||record.placeId){setItems([]);return;}
+    const controller=new AbortController();
+    const timer=setTimeout(async()=>{
+      setBusy(true);
+      try{
+        const response=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`,{
+          signal:controller.signal,
+          headers:{'Accept-Language':'en-US'}
+        });
+        const data=await response.json();
+        setItems(Array.isArray(data)?data:[]);
+      }catch(error){if(error.name!=='AbortError')setItems([]);}
+      finally{setBusy(false);}
+    },350);
+    return()=>{clearTimeout(timer);controller.abort();};
+  },[record.address,record.placeId]);
+
+  function choose(item){
+    const address=item.address||{};
+    const street=[address.house_number,address.road||address.pedestrian||address.highway].filter(Boolean).join(' ');
+    const city=address.city||address.town||address.village||address.hamlet||address.county||'';
+    const state=(address['ISO3166-2-lvl4']||'').split('-')[1]||address.state||'CA';
+    const area=address.neighbourhood||address.suburb||address.city_district||address.borough||city||address.county||'';
+    onChange({
+      address:street||item.display_name,city,state,zip:address.postcode||'',area,
+      placeId:String(item.place_id||''),latitude:Number(item.lat),longitude:Number(item.lon)
+    });
+    setItems([]);
+  }
+
+  return <label className="address-field">Smart address<input autoComplete="off" value={record.address||''} placeholder="Start typing an address…" onChange={event=>onChange({address:event.target.value,placeId:'',latitude:null,longitude:null})}/>{(busy||items.length>0)&&<div className="address-suggestions">{busy&&<span>Checking addresses…</span>}{items.map(item=><button type="button" key={item.place_id} onClick={()=>choose(item)}><MapPin/>{item.display_name}</button>)}</div>}<small>Select a suggested address to fill city, state, ZIP, and area.</small></label>;
+}
+
+function Editor({ row, units, sets, team, setMap, unitMap, onClose, onSave, onArchive, onPermanentDelete }) {
+  const [record,setRecord]=useState({...row,links:[...(row.links||[])]});
+  const [unitId,setUnitId]=useState(units.length ? (row.links?.[0]?.unitId || '') : '');
+  const [setId,setSetId]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState('');
+  const connected=Boolean(row.showId);
+  const availableSets=sets.filter(set=>set.work_type==='location'&&(!unitId||!set.unitIds.length||set.unitIds.includes(unitId)));
+  const update=(key,value)=>setRecord(current=>({...current,[key]:value}));
+  function addLink(){
+    if(!setId)return;
+    if(record.links.some(link=>link.setId===setId&&(link.unitId||'')===(unitId||'')))return setMessage('That episode and set are already linked.');
+    const set=setMap.get(setId);const unit=unitMap.get(unitId);
+    update('links',[...record.links,{setId,unitId:unitId||'',setName:set?.name||'',unitName:unit?.name||'',unitCode:unit?.code||''}]);
+    setSetId('');setMessage('');
+  }
+  async function save(){setBusy(true);setMessage('');try{await onSave(record)}catch(error){setMessage(error?.message||String(error));setBusy(false)}}
+  const existingScout=record.scout&&!team.some(member=>(member.display_name||member.email)===record.scout);
+  return <div className="modal-bg"><div className="modal location-editor"><button className="close" onClick={onClose} disabled={busy}><X/></button><p>SCOUT RECORD</p><h2>{record.name||'New Location'}</h2>
+    <section className="set-link-section"><div><h3>Set List assignment</h3><p>Select the episode or spot first. The set menu then shows only On Location sets available for it.</p></div><div className="set-link-controls">{units.length?<select value={unitId} onChange={event=>{setUnitId(event.target.value);setSetId('')}}><option value="">Select episode / unit</option>{units.map(unit=><option key={unit.id} value={unit.id}>{unit.code ? `${unit.code} · ` : ''}{unit.name}</option>)}</select>:<span className="production-wide-label">Production-wide</span>}<select value={setId} onChange={event=>setSetId(event.target.value)} disabled={Boolean(units.length&&!unitId)}><option value="">Select canonical set</option>{availableSets.map(set=><option key={set.id} value={set.id}>{set.int_ext}. {set.name}</option>)}</select><button type="button" onClick={addLink} disabled={!setId}><Plus size={16}/>Link set</button></div>
+    <div className="set-link-chips">{record.links.length?record.links.map((link,index)=><span key={`${link.setId}:${link.unitId}:${index}`}><b>{link.unitCode||link.unitName||'All'}</b>{link.setName}<button type="button" onClick={()=>update('links',record.links.filter((_,itemIndex)=>itemIndex!==index))} aria-label={`Remove ${link.setName}`}><X size={13}/></button></span>):<p>No canonical set linked yet.{row.set&&<> Existing label: <b>{row.set}</b>.</>}</p>}</div></section>
+    <div className="form">
+      <label>Name<input value={record.name||''} onChange={event=>update('name',event.target.value)}/></label>
+      <AddressAutocomplete record={record} onChange={patch=>setRecord(current=>({...current,...patch}))}/>
+      <label>City<input value={record.city||''} onChange={event=>setRecord(current=>({...current,city:event.target.value,area:current.area||event.target.value}))}/></label>
+      <label>State<input value={record.state||''} onChange={event=>update('state',event.target.value)}/></label>
+      <label>ZIP<input value={record.zip||''} onChange={event=>update('zip',event.target.value)}/></label>
+      <label>Area<input value={record.area||''} onChange={event=>update('area',event.target.value)}/></label>
+      <label>Contact<input value={record.contact||''} onChange={event=>update('contact',event.target.value)}/></label>
+      <label>Phone<input value={record.phone||''} onChange={event=>update('phone',event.target.value)}/></label>
+      <label>Email<input type="email" value={record.email||''} onChange={event=>update('email',event.target.value)}/></label>
+      <label>Scouted by<select value={record.scout||''} onChange={event=>update('scout',event.target.value)}><option value="">Unassigned</option>{existingScout&&<option>{record.scout}</option>}{team.map(member=><option key={member.user_id} value={member.display_name||member.email}>{member.display_name||member.email}</option>)}</select></label>
+      <label>Scout date<input type="date" value={record.date||''} onChange={event=>update('date',event.target.value)}/></label>
+      <label>Status<select value={record.status} onChange={event=>update('status',event.target.value)}>{statuses.map(status=><option key={status}>{status}</option>)}</select></label>
+      <label className="full">Notes<textarea value={record.notes||''} onChange={event=>update('notes',event.target.value)}/></label>
+    </div>
+    {message&&<div className="editor-message">{message}</div>}
+    <div className="editor-actions"><div>{connected&&<><button type="button" onClick={()=>onArchive(row)}><Archive size={16}/>Archive Location</button><button type="button" className="permanent-delete" onClick={()=>onPermanentDelete(row)}><Trash2 size={16}/>Permanent Delete</button></>}</div><button className="primary save-location" onClick={save} disabled={busy}><Save/>{busy?'Saving…':'Save Location'}</button></div>
+    {connected&&<small className="canonical-id">Canonical Location ID: {row.id}</small>}
+  </div></div>;
+}
+
+function FinalList({ rows, setRows, query, setQuery }) {
+  const visible=rows.filter(row=>Object.values(row).join(' ').toLowerCase().includes(query.toLowerCase()));
+  const groups=[...new Set(visible.map(row=>row.episode||'Unassigned'))].sort();
+  return <section className="final"><div className="final-tools"><label className="search"><Search/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search location, address, set, scene, key…"/></label><button className="primary" onClick={()=>setRows(current=>[...current,{id:uid(),episode:'',location:'New Location',address:'',city:'',contacts:'',sets:'',scenes:'',key:'',dates:'',support:[]}])}><Plus/>Add Final Location</button></div><div className="print-title">FINAL LOCATION LIST</div>{groups.map(episode=><section className="episode-section" key={episode}><div className="episode-break"><span>EPISODE</span><h2>{episode}</h2></div>{visible.filter(row=>(row.episode||'Unassigned')===episode).map(row=><article className="location-block" key={row.id}><div className="bar"><span>LOCATION INFORMATION</span><span>EPISODE / SET / SCENE</span><span>LOCATION DEPT CONTACT & DATES</span></div><div className="cols"><div><h3 contentEditable suppressContentEditableWarning onBlur={event=>editFinal(setRows,row.id,'location',event.currentTarget.innerText)}>{row.location}</h3><p contentEditable suppressContentEditableWarning onBlur={event=>editFinal(setRows,row.id,'address',event.currentTarget.innerText)}>{row.address}</p><p contentEditable suppressContentEditableWarning onBlur={event=>editFinal(setRows,row.id,'city',event.currentTarget.innerText)}>{row.city}</p><pre contentEditable suppressContentEditableWarning onBlur={event=>editFinal(setRows,row.id,'contacts',event.currentTarget.innerText)}>{row.contacts}</pre></div><div><label className="episode-edit">Episode<input value={row.episode||''} onChange={event=>editFinal(setRows,row.id,'episode',event.target.value)}/></label><p><b>{row.sets}</b></p><p>Scenes: {row.scenes}</p></div><div><p><b>{row.key}</b></p><pre>{row.dates}</pre></div></div>{(row.support||[]).map((support,index)=><div className="support" key={index}><div>{support.use}</div><div>{support.place}</div><div>{support.contact}</div></div>)}</article>)}</section>)}</section>;
+}
+
+function editFinal(setRows,id,key,value){setRows(current=>current.map(row=>row.id===id?{...row,[key]:value}:row));}
+
 createRoot(document.getElementById('root')).render(<App/>);
