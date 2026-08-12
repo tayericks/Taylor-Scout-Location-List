@@ -1,0 +1,70 @@
+name: Apply pre-audit Location List hardening
+on:
+  push:
+    paths:
+      - '.github/workflows/pre-audit-location-hardening.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Location List context, type and voice feedback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/main.jsx')
+          s=p.read_text()
+
+          old="  const showId = getShowId();\n  const localKey = `ts-location-scouts:${showId || 'local'}`;"
+          new="  const showId = getShowId();\n  const requestedLocationId = new URLSearchParams(window.location.search).get('locationId') || '';\n  const localKey = `ts-location-scouts:${showId || 'local'}`;"
+          if old not in s: raise SystemExit('showId context target not found')
+          s=s.replace(old,new,1)
+
+          old="  const [tab, setTab] = useState('tracker');"
+          new="  const [tab, setTab] = useState(() => localStorage.getItem(`ts-location-tab:${showId || 'local'}`) || 'tracker');"
+          if old not in s: raise SystemExit('tab target not found')
+          s=s.replace(old,new,1)
+
+          old="  const [episodeFilter, setEpisodeFilter] = useState('all');"
+          new="  const [episodeFilter, setEpisodeFilter] = useState(() => localStorage.getItem(`ts-location-episode:${showId || 'local'}`) || 'all');"
+          if old not in s: raise SystemExit('episode filter target not found')
+          s=s.replace(old,new,1)
+
+          old="    setScouts(consolidatePhysicalLocations(next.locations.filter(location => !location.isFinal)));\n    setCloudState('Saved');"
+          new="    const consolidated=consolidatePhysicalLocations(next.locations.filter(location => !location.isFinal));\n    setScouts(consolidated);\n    if(requestedLocationId){const match=consolidated.find(location=>location.id===requestedLocationId || (location.metadata?.grouped_location_ids||[]).includes(requestedLocationId));if(match)setEditing(match);}\n    setCloudState('Saved');"
+          if old not in s: raise SystemExit('apply workspace target not found')
+          s=s.replace(old,new,1)
+
+          old="  useEffect(() => { localStorage.setItem(localKey, JSON.stringify(scouts)); }, [scouts, localKey]);"
+          new="  useEffect(() => { localStorage.setItem(localKey, JSON.stringify(scouts)); }, [scouts, localKey]);\n  useEffect(() => { localStorage.setItem(`ts-location-tab:${showId || 'local'}`, tab); }, [tab, showId]);\n  useEffect(() => { localStorage.setItem(`ts-location-episode:${showId || 'local'}`, episodeFilter); }, [episodeFilter, showId]);"
+          if old not in s: raise SystemExit('persistence anchor not found')
+          s=s.replace(old,new,1)
+
+          old="    await persist(next);\n    setScouts(current => {"
+          new="    await persist(next);\n    const url=new URL(window.location.href);url.searchParams.set('locationId',next.id);window.history.replaceState({},'',url.toString());\n    setScouts(current => {"
+          if old not in s: raise SystemExit('save editor context target not found')
+          s=s.replace(old,new,1)
+
+          old="  const shellStyle = { '--ts-navy': theme.primary || '#061f33', '--ts-navy-2': theme.secondary || '#0b2e46', '--ts-teal': theme.accent || '#2fb5b2', '--ts-font': theme.font || 'Inter' };"
+          new="  const shellStyle = { '--ts-navy': theme.primary || '#061f33', '--ts-navy-2': theme.secondary || '#0b2e46', '--ts-teal': theme.accent || '#2fb5b2', '--ts-font': 'Inter' };"
+          if old not in s: raise SystemExit('font lock target not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('src/smart-capture.js')
+          s=p.read_text()
+          old="    recognition.onend=()=>{recognition=null;e.currentTarget.textContent='🎙 Start Voice'};recognition.start();e.currentTarget.textContent='■ Stop Voice';"
+          new="    recognition.onerror=event=>{panel.querySelector('.smart-status').textContent=event.error==='not-allowed'?'Microphone permission was blocked. Allow microphone access in Chrome, then try again.':`Voice transcription error: ${event.error||'unknown error'}. Your Scout Log has not been changed.`;recognition=null;e.currentTarget.textContent='🎙 Start Voice'};\n    recognition.onend=()=>{recognition=null;e.currentTarget.textContent='🎙 Start Voice'};\n    try{recognition.start();panel.querySelector('.smart-status').textContent='Listening… speak naturally. Live transcription will appear above.';e.currentTarget.textContent='■ Stop Voice'}catch(error){recognition=null;e.currentTarget.textContent='🎙 Start Voice';panel.querySelector('.smart-status').textContent=`Could not start voice capture: ${error.message}`;}"
+          if old not in s: raise SystemExit('voice recognition target not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Commit Location List hardening
+        run: |
+          git config user.name "Taylor Scout Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/main.jsx src/smart-capture.js
+          git commit -m "Pre-audit hardening: Location List context, typography and voice feedback"
+          git push
