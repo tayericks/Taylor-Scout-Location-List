@@ -78,7 +78,9 @@ function createPanel(editor){
     if(recognition){recognition.stop();recognition=null;e.currentTarget.textContent='🎙 Start Voice';return}
     recognition=new SpeechRecognition();recognition.continuous=true;recognition.interimResults=true;
     recognition.onresult=event=>{let final='';for(let i=event.resultIndex;i<event.results.length;i++)if(event.results[i].isFinal)final+=event.results[i][0].transcript+' ';if(final){const raw=panel.querySelector('.smart-raw');raw.value=(raw.value+' '+final).trim()}};
-    recognition.onend=()=>{recognition=null;e.currentTarget.textContent='🎙 Start Voice'};recognition.start();e.currentTarget.textContent='■ Stop Voice';
+    recognition.onerror=event=>{panel.querySelector('.smart-status').textContent=event.error==='not-allowed'?'Microphone permission was blocked. Allow microphone access in Chrome, then try again.':`Voice transcription error: ${event.error||'unknown error'}. Your Scout Log has not been changed.`;recognition=null;e.currentTarget.textContent='🎙 Start Voice'};
+    recognition.onend=()=>{recognition=null;e.currentTarget.textContent='🎙 Start Voice'};
+    try{recognition.start();panel.querySelector('.smart-status').textContent='Listening… speak naturally. Live transcription will appear above.';e.currentTarget.textContent='■ Stop Voice'}catch(error){recognition=null;e.currentTarget.textContent='🎙 Start Voice';panel.querySelector('.smart-status').textContent=`Could not start voice capture: ${error.message}`;}
   };
   panel.querySelector('.smart-apply').onclick=()=>{
     const active=panel.querySelector('[data-smart-mode].active')?.dataset.smartMode||'quick';

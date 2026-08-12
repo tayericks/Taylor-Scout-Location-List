@@ -63,26 +63,31 @@ function consolidatePhysicalLocations(rows) {
 
 function App() {
   const showId = getShowId();
+  const requestedLocationId = new URLSearchParams(window.location.search).get('locationId') || '';
   const localKey = `ts-location-scouts:${showId || 'local'}`;
   const [workspace, setWorkspace] = useState(emptyWorkspace);
   const [scouts, setScouts] = useState(() => loadLocal(localKey, []));
   const [finals, setFinals] = useState(() => loadLocal(`ts-location-finals:${showId || 'local'}`, []));
   const [cloudState, setCloudState] = useState(configured ? 'Connecting…' : 'Saved locally');
-  const [tab, setTab] = useState('tracker');
+  const [tab, setTab] = useState(() => localStorage.getItem(`ts-location-tab:${showId || 'local'}`) || 'tracker');
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState({ set: '', city: '', scout: '', status: '', date: '' });
-  const [episodeFilter, setEpisodeFilter] = useState('all');
+  const [episodeFilter, setEpisodeFilter] = useState(() => localStorage.getItem(`ts-location-episode:${showId || 'local'}`) || 'all');
   const [editing, setEditing] = useState(null);
   const [sort, setSort] = useState('name-asc');
   const [pendingWorkspace, setPendingWorkspace] = useState(null);
 
   function applyWorkspace(next) {
     setWorkspace(next);
-    setScouts(consolidatePhysicalLocations(next.locations.filter(location => !location.isFinal)));
+    const consolidated=consolidatePhysicalLocations(next.locations.filter(location => !location.isFinal));
+    setScouts(consolidated);
+    if(requestedLocationId){const match=consolidated.find(location=>location.id===requestedLocationId || (location.metadata?.grouped_location_ids||[]).includes(requestedLocationId));if(match)setEditing(match);}
     setCloudState('Saved');
   }
 
   useEffect(() => { localStorage.setItem(localKey, JSON.stringify(scouts)); }, [scouts, localKey]);
+  useEffect(() => { localStorage.setItem(`ts-location-tab:${showId || 'local'}`, tab); }, [tab, showId]);
+  useEffect(() => { localStorage.setItem(`ts-location-episode:${showId || 'local'}`, episodeFilter); }, [episodeFilter, showId]);
   useEffect(() => { localStorage.setItem(`ts-location-finals:${showId || 'local'}`, JSON.stringify(finals)); }, [finals, showId]);
   useEffect(() => {
     if (!configured || !showId) return;
@@ -147,6 +152,7 @@ function App() {
       links: mergeCanonicalLinks(match.links || [], row.links || [])
     } : row;
     await persist(next);
+    const url=new URL(window.location.href);url.searchParams.set('locationId',next.id);window.history.replaceState({},'',url.toString());
     setScouts(current => {
       const withoutUnsavedDuplicate = current.filter(item => item.id !== row.id || item.id === next.id);
       return withoutUnsavedDuplicate.some(item => item.id === next.id)
@@ -193,7 +199,7 @@ function App() {
   }
 
   const theme = workspace.show.theme || {};
-  const shellStyle = { '--ts-navy': theme.primary || '#061f33', '--ts-navy-2': theme.secondary || '#0b2e46', '--ts-teal': theme.accent || '#2fb5b2', '--ts-font': theme.font || 'Inter' };
+  const shellStyle = { '--ts-navy': theme.primary || '#061f33', '--ts-navy-2': theme.secondary || '#0b2e46', '--ts-teal': theme.accent || '#2fb5b2', '--ts-font': 'Inter' };
   const setOptions = [...new Set(scouts.flatMap(row => (row.links || []).map(link => link.setName)).concat(scouts.map(row => row.set)).filter(Boolean))].sort();
   const openNew = () => setEditing(newLocation(showId));
 
