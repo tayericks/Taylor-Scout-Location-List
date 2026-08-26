@@ -1,11 +1,11 @@
 {
   "name": "taylor-scout-location-list",
   "private": true,
-  "version": "10.6.0",
+  "version": "10.6.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/apply-location-list-font-fix.cjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
