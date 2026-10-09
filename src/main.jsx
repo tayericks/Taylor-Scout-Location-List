@@ -304,7 +304,12 @@ function Editor({ row, units, sets, team, setMap, unitMap, onClose, onSave, onAr
   }
   async function save(){setBusy(true);setMessage('');try{await onSave(record)}catch(error){setMessage(error?.message||String(error));setBusy(false)}}
   const existingScout=record.scout&&!team.some(member=>(member.display_name||member.email)===record.scout);
-  return <div className="modal-bg"><div className="modal location-editor"><button className="close" onClick={onClose} disabled={busy}><X/></button><p>SCOUT RECORD</p><h2>{record.name||'New Location'}</h2>
+  useEffect(()=>{
+    const onKeyDown=event=>{ if(event.key==='Escape'&&!busy) onClose(); };
+    window.addEventListener('keydown',onKeyDown);
+    return()=>window.removeEventListener('keydown',onKeyDown);
+  },[busy,onClose]);
+  return <div className="modal-bg" onMouseDown={event=>{ if(event.target===event.currentTarget&&!busy) onClose(); }}><div className="modal location-editor"><button className="close" onClick={onClose} disabled={busy} aria-label="Close location"><X/></button><p>SCOUT RECORD</p><h2>{record.name||'New Location'}</h2>
     <section className="set-link-section"><div><h3>Set List assignment</h3><p>Select the episode or spot first. The set menu then shows only On Location sets available for it.</p></div><div className="set-link-controls">{units.length?<select value={unitId} onChange={event=>{setUnitId(event.target.value);setSetId('')}}><option value="">Select episode / unit</option>{units.map(unit=><option key={unit.id} value={unit.id}>{unit.code ? `${unit.code} · ` : ''}{unit.name}</option>)}</select>:<span className="production-wide-label">Production-wide</span>}<select value={setId} onChange={event=>setSetId(event.target.value)} disabled={Boolean(units.length&&!unitId)}><option value="">Select canonical set</option>{availableSets.map(set=><option key={set.id} value={set.id}>{set.int_ext}. {set.name}</option>)}</select><button type="button" onClick={addLink} disabled={!setId}><Plus size={16}/>Link set</button></div>
     <div className="set-link-chips">{record.links.length?record.links.map((link,index)=><span key={`${link.setId}:${link.unitId}:${index}`}><b>{link.unitCode||link.unitName||'All'}</b>{link.setName}<button type="button" onClick={()=>update('links',record.links.filter((_,itemIndex)=>itemIndex!==index))} aria-label={`Remove ${link.setName}`}><X size={13}/></button></span>):<p>No canonical set linked yet.{row.set&&<> Existing label: <b>{row.set}</b>.</>}</p>}</div></section>
     <div className="form">
