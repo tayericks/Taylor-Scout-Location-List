@@ -161,3 +161,20 @@
   .location-editor .form textarea,
   .location-editor .set-link-controls select { font-size: 16px !important; }
 }
+
+/* Keep the location editor close control visible while the modal body scrolls. */
+.location-editor .close {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  margin-bottom: -40px !important;
+  background: #fff !important;
+  border: 1px solid #d6e0e7 !important;
+  border-radius: 9px !important;
+  box-shadow: 0 2px 8px rgba(6,31,51,.08) !important;
+}
+.location-editor {
+  overscroll-behavior: contain;
+}
